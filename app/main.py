@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.routers import auth
+from app.routers import auth, ideas
 
 app = FastAPI(
     title="Hitbus API",
@@ -8,6 +8,7 @@ app = FastAPI(
 )
 
 app.include_router(auth.router)
+app.include_router(ideas.router)
 
 @app.get("/")
 def root():
