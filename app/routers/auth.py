@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException
+from datetime import datetime
 from pydantic import BaseModel, EmailStr
 from app.database import get_connection
 from app.utils.hashing import hash_password
@@ -79,6 +80,53 @@ def register(data: RegisterRequest):
         raise
     except Exception as e:
         conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        cursor.close()
+        conn.close()
+
+from app.utils.hashing import verify_password
+from app.utils.tokens import create_access_token
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+@router.post("/login")
+def login(data: LoginRequest):
+    conn = get_connection()
+    cursor = conn.cursor(dictionary=True)
+
+    try:
+        cursor.execute("SELECT * FROM users WHERE email = %s", (data.email,))
+        user = cursor.fetchone()
+
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+
+        if not verify_password(data.password, user["password_hash"]):
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+
+        if user["account_status"] == "suspended":
+            raise HTTPException(status_code=403, detail="Account suspended")
+
+        token = create_access_token({"sub": user["user_id"], "role": user["role"]})
+
+        cursor.execute("UPDATE users SET last_active_at = %s WHERE user_id = %s",
+                       (datetime.utcnow(), user["user_id"]))
+        conn.commit()
+
+        return {
+            "access_token": token,
+            "token_type": "bearer",
+            "user_id": user["user_id"],
+            "role": user["role"],
+            "email_verified": bool(user["email_verified"])
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         cursor.close()

@@ -1,8 +1,19 @@
 import secrets
 from datetime import datetime, timedelta
+from jose import JWTError, jwt
+from app.config import SECRET_KEY, ACCESS_TOKEN_EXPIRE_MINUTES
 
 def generate_verification_token() -> str:
     return secrets.token_urlsafe(32)
 
 def token_expiry(hours: int = 24) -> datetime:
     return datetime.utcnow() + timedelta(hours=hours)
+
+def create_access_token(data: dict) -> str:
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm="HS256")
+
+def decode_access_token(token: str) -> dict:
+    return jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
